@@ -1,0 +1,142 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<project id="pr_001" name="Разработка блока управления БУ-2000">
+	<product id="prod_001" code="БУ-2000" name="Блок управления" type="аппаратное средство">
+		<components>
+			<!-- Сборка: Плата контроллера -->
+			<component id="comp_001" name="Плата контроллера" type="assembly" quantity="1">
+				<tech_process>
+					<operation name="Входной контроль компонентов" sequence="1">
+						<dependencies/>
+					</operation>
+					<operation name="Монтаж SMD-компонентов" sequence="2">
+						<dependencies>
+							<depends_on operation_id="1"/>
+						</dependencies>
+					</operation>
+					<operation name="Промывка и контроль" sequence="3">
+						<dependencies>
+							<depends_on operation_id="2"/>
+						</dependencies>
+					</operation>
+					<operation name="Тестирование" sequence="4">
+						<dependencies>
+							<depends_on operation_id="3"/>
+						</dependencies>
+					</operation>
+				</tech_process>
+
+				<children>
+					<component id="comp_002" name="Микроконтроллер STM32F407" type="purchase" quantity="1">
+						<tech_process/>
+					</component>
+
+					<component id="comp_003" name="Конденсатор 10мкФ 50В" type="purchase" quantity="10">
+						<tech_process/>
+					</component>
+
+					<component id="comp_004" name="Разъем USB" type="purchase" quantity="1">
+						<tech_process/>
+					</component>
+
+					<component id="comp_005" name="Печатная плата" type="detail" quantity="1">
+						<tech_process>
+							<operation name="Резка заготовки" sequence="1">
+								<dependencies/>
+							</operation>
+							<operation name="Сверление отверстий" sequence="2">
+								<dependencies>
+									<depends_on operation_id="1"/>
+								</dependencies>
+							</operation>
+						</tech_process>
+					</component>
+				</children>
+			</component>
+
+			<!-- Сборка: Корпус -->
+			<component id="comp_006" name="Корпус металлический" type="assembly" quantity="1">
+				<children>
+					<component id="comp_007" name="Крышка верхняя" type="detail" quantity="1">
+						<tech_process>
+							<operation name="Резка" sequence="1">
+								<dependencies/>
+							</operation>
+							<operation name="Гибка" sequence="2">
+								<dependencies>
+									<depends_on operation_id="1"/>
+								</dependencies>
+							</operation>
+							<operation name="Сверление отверстий" sequence="3">
+								<dependencies>
+									<depends_on operation_id="2"/>
+								</dependencies>
+							</operation>
+						</tech_process>
+					</component>
+
+					<component id="comp_008" name="Основание" type="detail" quantity="1">
+						<tech_process>
+							<operation name="Резка" sequence="1">
+								<dependencies/>
+							</operation>
+							<operation name="Гибка" sequence="2">
+								<dependencies>
+									<depends_on operation_id="1"/>
+								</dependencies>
+							</operation>
+							<operation name="Сверление отверстий" sequence="3">
+								<dependencies>
+									<depends_on operation_id="2"/>
+								</dependencies>
+							</operation>
+						</tech_process>
+					</component>
+
+					<component id="comp_009" name="Винты М3х8" type="purchase" quantity="8">
+						<tech_process/>
+					</component>
+				</children>
+			</component>
+
+			<!-- Компонент: Блок питания (покупной) -->
+			<component id="comp_010" name="Блок питания 24В 3А" type="purchase" quantity="1">
+				<tech_process/>
+			</component>
+		</components>
+
+		<!-- Техпроцесс финальной сборки изделия -->
+		<tech_process>
+			<operation name="Установка платы контроллера в корпус" sequence="1">
+				<dependencies>
+					<depends_on component_id="comp_001"/>
+					<depends_on component_id="comp_006"/>
+				</dependencies>
+			</operation>
+
+			<operation name="Подключение разъемов и жгутов" sequence="2">
+				<dependencies>
+					<depends_on operation_id="1"/>
+				</dependencies>
+			</operation>
+
+			<operation name="Установка блока питания" sequence="3">
+				<dependencies>
+					<depends_on component_id="comp_010"/>
+					<depends_on operation_id="2"/>
+				</dependencies>
+			</operation>
+
+			<operation name="Функциональное тестирование" sequence="4">
+				<dependencies>
+					<depends_on operation_id="3"/>
+				</dependencies>
+			</operation>
+
+			<operation name="Маркировка и упаковка" sequence="5">
+				<dependencies>
+					<depends_on operation_id="4"/>
+				</dependencies>
+			</operation>
+		</tech_process>
+	</product>
+</project>
