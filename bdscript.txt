@@ -1,0 +1,292 @@
+-- Скрипт создания базы данных для системы планирования производства
+-- Сгенерировано на основе моделей Django
+-- Порядок таблиц соблюдает зависимости внешних ключей
+
+-- -------------------------
+-- Таблица project
+-- -------------------------
+CREATE TABLE IF NOT EXISTS project (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL DEFAULT '',
+    status VARCHAR(255) NOT NULL,
+    start_date DATE,
+    end_date DATE,
+    deadline DATE,
+    total_labor_planned NUMERIC(19,0),
+    total_labor_actual NUMERIC(19,0)
+);
+
+COMMENT ON TABLE project IS 'Проекты производства';
+COMMENT ON COLUMN project.name IS 'Название проекта';
+COMMENT ON COLUMN project.description IS 'Описание проекта';
+COMMENT ON COLUMN project.status IS 'Статус проекта';
+COMMENT ON COLUMN project.start_date IS 'Дата начала';
+COMMENT ON COLUMN project.end_date IS 'Дата окончания (факт)';
+COMMENT ON COLUMN project.deadline IS 'Дедлайн (план)';
+COMMENT ON COLUMN project.total_labor_planned IS 'Плановые трудозатраты (чел.-часы)';
+COMMENT ON COLUMN project.total_labor_actual IS 'Фактические трудозатраты (чел.-часы)';
+
+-- -------------------------
+-- Таблица tech_process
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tech_process (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL DEFAULT '',
+    required_qualification VARCHAR(255) NOT NULL DEFAULT '',
+    equipment_required JSONB,
+    prep_time INTEGER,
+    unit_time INTEGER,
+    sequence_order INTEGER
+);
+
+COMMENT ON TABLE tech_process IS 'Технологические процессы / операции';
+COMMENT ON COLUMN tech_process.name IS 'Название техпроцесса/операции';
+COMMENT ON COLUMN tech_process.description IS 'Описание';
+COMMENT ON COLUMN tech_process.required_qualification IS 'Требуемая квалификация';
+COMMENT ON COLUMN tech_process.equipment_required IS 'Требуемое оборудование (JSON)';
+COMMENT ON COLUMN tech_process.prep_time IS 'Подготовительное время';
+COMMENT ON COLUMN tech_process.unit_time IS 'Штучное время';
+COMMENT ON COLUMN tech_process.sequence_order IS 'Порядок выполнения';
+
+-- -------------------------
+-- Таблица equipment
+-- -------------------------
+CREATE TABLE IF NOT EXISTS equipment (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(255) NOT NULL DEFAULT '',
+    specifications JSONB,
+    work_schedule JSONB,
+    maintenance_requirements VARCHAR(255) NOT NULL DEFAULT '',
+    cost_per_hour NUMERIC(19,0)
+);
+
+COMMENT ON TABLE equipment IS 'Производственное оборудование';
+COMMENT ON COLUMN equipment.name IS 'Название оборудования';
+COMMENT ON COLUMN equipment.type IS 'Тип оборудования';
+COMMENT ON COLUMN equipment.specifications IS 'Характеристики (JSON)';
+COMMENT ON COLUMN equipment.work_schedule IS 'График работы (JSON)';
+COMMENT ON COLUMN equipment.maintenance_requirements IS 'Требования к обслуживанию';
+COMMENT ON COLUMN equipment.cost_per_hour IS 'Стоимость часа эксплуатации';
+
+-- -------------------------
+-- Таблица personnel
+-- -------------------------
+CREATE TABLE IF NOT EXISTS personnel (
+    id SERIAL PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    position VARCHAR(255) NOT NULL DEFAULT '',
+    qualification VARCHAR(255) NOT NULL DEFAULT '',
+    specialization VARCHAR(255) NOT NULL DEFAULT '',
+    work_schedule JSONB,
+    monthly_hours_norm INTEGER,
+    current_load_percent NUMERIC(19,0)
+);
+
+COMMENT ON TABLE personnel IS 'Персонал (сотрудники)';
+COMMENT ON COLUMN personnel.full_name IS 'ФИО';
+COMMENT ON COLUMN personnel.position IS 'Должность';
+COMMENT ON COLUMN personnel.qualification IS 'Квалификация';
+COMMENT ON COLUMN personnel.specialization IS 'Специализация';
+COMMENT ON COLUMN personnel.work_schedule IS 'График работы (JSON)';
+COMMENT ON COLUMN personnel.monthly_hours_norm IS 'Норма часов в месяц';
+COMMENT ON COLUMN personnel.current_load_percent IS 'Текущая загрузка (%)';
+
+-- -------------------------
+-- Таблица product
+-- -------------------------
+CREATE TABLE IF NOT EXISTS product (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(255) NOT NULL DEFAULT '',
+    type VARCHAR(255) NOT NULL DEFAULT '',
+    structure_tree JSONB,
+    tech_requirements VARCHAR(255) NOT NULL DEFAULT '',
+    norm_hours NUMERIC(19,0)
+);
+
+COMMENT ON TABLE product IS 'Изделия, производимые в проекте';
+COMMENT ON COLUMN product.name IS 'Название изделия';
+COMMENT ON COLUMN product.code IS 'Код/обозначение';
+COMMENT ON COLUMN product.type IS 'Тип изделия';
+COMMENT ON COLUMN product.structure_tree IS 'Древовидная структура изделия (JSON)';
+COMMENT ON COLUMN product.tech_requirements IS 'Технические требования';
+COMMENT ON COLUMN product.norm_hours IS 'Нормо-часы на изделие';
+
+-- -------------------------
+-- Таблица component
+-- -------------------------
+CREATE TABLE IF NOT EXISTS component (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+    parent_component_id INTEGER REFERENCES component(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(255) NOT NULL DEFAULT '',
+    quantity INTEGER,
+    parameters JSONB,
+    labor_per_operation NUMERIC(19,0),
+    dependencies JSONB
+);
+
+COMMENT ON TABLE component IS 'Компоненты изделия (элементы дерева)';
+COMMENT ON COLUMN component.name IS 'Название компонента';
+COMMENT ON COLUMN component.type IS 'Тип/класс компонента';
+COMMENT ON COLUMN component.quantity IS 'Количество (шт.)';
+COMMENT ON COLUMN component.parameters IS 'Параметры компонента (JSON)';
+COMMENT ON COLUMN component.labor_per_operation IS 'Трудозатраты на операцию (чел.-часы)';
+COMMENT ON COLUMN component.dependencies IS 'Технологические/структурные зависимости (JSON)';
+
+-- -------------------------
+-- Таблица production_plan
+-- -------------------------
+CREATE TABLE IF NOT EXISTS production_plan (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    algorithm_used VARCHAR(255) NOT NULL,
+    created_date DATE,
+    status VARCHAR(255) NOT NULL,
+    schedule JSONB,
+    actual_data JSONB,
+    deviations JSONB
+);
+
+COMMENT ON TABLE production_plan IS 'Рассчитанные производственные планы';
+COMMENT ON COLUMN production_plan.algorithm_used IS 'Используемый алгоритм';
+COMMENT ON COLUMN production_plan.created_date IS 'Дата создания';
+COMMENT ON COLUMN production_plan.status IS 'Статус плана';
+COMMENT ON COLUMN production_plan.schedule IS 'Расписание (JSON)';
+COMMENT ON COLUMN production_plan.actual_data IS 'Фактические данные (JSON)';
+COMMENT ON COLUMN production_plan.deviations IS 'Отклонения (JSON)';
+
+-- -------------------------
+-- Таблица algorithm_comparison
+-- -------------------------
+CREATE TABLE IF NOT EXISTS algorithm_comparison (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    algorithm_name VARCHAR(255) NOT NULL,
+    total_duration DOUBLE PRECISION,
+    resource_utilization DOUBLE PRECISION,
+    deadline_satisfaction DOUBLE PRECISION,
+    computed_date DATE
+);
+
+COMMENT ON TABLE algorithm_comparison IS 'Сравнение метрик алгоритмов планирования';
+COMMENT ON COLUMN algorithm_comparison.algorithm_name IS 'Название алгоритма';
+COMMENT ON COLUMN algorithm_comparison.total_duration IS 'Общая длительность';
+COMMENT ON COLUMN algorithm_comparison.resource_utilization IS 'Утилизация ресурсов';
+COMMENT ON COLUMN algorithm_comparison.deadline_satisfaction IS 'Удовлетворение дедлайна';
+COMMENT ON COLUMN algorithm_comparison.computed_date IS 'Дата расчета';
+
+-- -------------------------
+-- Связующая таблица product_component
+-- -------------------------
+CREATE TABLE IF NOT EXISTS product_component (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+    component_id INTEGER NOT NULL REFERENCES component(id) ON DELETE CASCADE,
+    CONSTRAINT uq_product_component UNIQUE (product_id, component_id)
+);
+
+COMMENT ON TABLE product_component IS 'Связь изделий и компонентов (многие ко многим)';
+
+-- -------------------------
+-- Связующая таблица component_tech_process
+-- -------------------------
+CREATE TABLE IF NOT EXISTS component_tech_process (
+    id SERIAL PRIMARY KEY,
+    component_id INTEGER NOT NULL REFERENCES component(id) ON DELETE CASCADE,
+    tech_process_id INTEGER NOT NULL REFERENCES tech_process(id) ON DELETE CASCADE,
+    CONSTRAINT uq_component_tech_process UNIQUE (component_id, tech_process_id)
+);
+
+COMMENT ON TABLE component_tech_process IS 'Связь компонентов и технологических процессов';
+
+-- -------------------------
+-- Связующая таблица production_plan_equipment
+-- -------------------------
+CREATE TABLE IF NOT EXISTS production_plan_equipment (
+    id SERIAL PRIMARY KEY,
+    production_plan_id INTEGER NOT NULL REFERENCES production_plan(id) ON DELETE CASCADE,
+    equipment_id INTEGER NOT NULL REFERENCES equipment(id) ON DELETE CASCADE,
+    hours_required INTEGER,
+    CONSTRAINT uq_plan_equipment UNIQUE (production_plan_id, equipment_id)
+);
+
+COMMENT ON TABLE production_plan_equipment IS 'Связь планов производства и оборудования (с указанием требуемых часов)';
+
+-- -------------------------
+-- Связующая таблица production_plan_personnel
+-- -------------------------
+CREATE TABLE IF NOT EXISTS production_plan_personnel (
+    id SERIAL PRIMARY KEY,
+    production_plan_id INTEGER NOT NULL REFERENCES production_plan(id) ON DELETE CASCADE,
+    personnel_id INTEGER NOT NULL REFERENCES personnel(id) ON DELETE CASCADE,
+    hours_assigned INTEGER,
+    CONSTRAINT uq_plan_personnel UNIQUE (production_plan_id, personnel_id)
+);
+
+COMMENT ON TABLE production_plan_personnel IS 'Связь планов производства и персонала (с указанием назначенных часов)';
+
+-- -------------------------
+-- Индексы (в соответствии с Meta.indexes)
+-- -------------------------
+
+-- Project
+CREATE INDEX IF NOT EXISTS project_status_idx ON project(status);
+CREATE INDEX IF NOT EXISTS project_start_dt_idx ON project(start_date);
+CREATE INDEX IF NOT EXISTS project_deadline_idx ON project(deadline);
+
+-- Product
+CREATE INDEX IF NOT EXISTS product_proj_name_idx ON product(project_id, name);
+CREATE INDEX IF NOT EXISTS product_proj_code_idx ON product(project_id, code);
+CREATE INDEX IF NOT EXISTS product_type_idx ON product(type);
+
+-- Component
+CREATE INDEX IF NOT EXISTS comp_prod_name_idx ON component(product_id, name);
+CREATE INDEX IF NOT EXISTS comp_prod_type_idx ON component(product_id, type);
+CREATE INDEX IF NOT EXISTS comp_parent_idx ON component(parent_component_id);
+
+-- TechProcess
+CREATE INDEX IF NOT EXISTS tp_name_idx ON tech_process(name);
+CREATE INDEX IF NOT EXISTS tp_seq_idx ON tech_process(sequence_order);
+
+-- Equipment
+CREATE INDEX IF NOT EXISTS equip_name_idx ON equipment(name);
+CREATE INDEX IF NOT EXISTS equip_type_idx ON equipment(type);
+
+-- Personnel
+CREATE INDEX IF NOT EXISTS pers_name_idx ON personnel(full_name);
+CREATE INDEX IF NOT EXISTS pers_pos_idx ON personnel(position);
+
+-- ProductionPlan
+CREATE INDEX IF NOT EXISTS plan_proj_status_idx ON production_plan(project_id, status);
+CREATE INDEX IF NOT EXISTS plan_proj_created_idx ON production_plan(project_id, created_date);
+CREATE INDEX IF NOT EXISTS plan_algo_idx ON production_plan(algorithm_used);
+
+-- AlgorithmComparison
+CREATE INDEX IF NOT EXISTS algo_proj_name_idx ON algorithm_comparison(project_id, algorithm_name);
+CREATE INDEX IF NOT EXISTS algo_comp_dt_idx ON algorithm_comparison(computed_date);
+
+-- Индексы для внешних ключей в связующих таблицах
+CREATE INDEX IF NOT EXISTS pc_product_idx ON product_component(product_id);
+CREATE INDEX IF NOT EXISTS pc_component_idx ON product_component(component_id);
+
+CREATE INDEX IF NOT EXISTS ctp_component_idx ON component_tech_process(component_id);
+CREATE INDEX IF NOT EXISTS ctp_techproc_idx ON component_tech_process(tech_process_id);
+
+CREATE INDEX IF NOT EXISTS ppe_plan_idx ON production_plan_equipment(production_plan_id);
+CREATE INDEX IF NOT EXISTS ppe_equipment_idx ON production_plan_equipment(equipment_id);
+
+CREATE INDEX IF NOT EXISTS ppp_plan_idx ON production_plan_personnel(production_plan_id);
+CREATE INDEX IF NOT EXISTS ppp_personnel_idx ON production_plan_personnel(personnel_id);
+
+-- -------------------------
+-- Дополнительные индексы для полей, которые часто используются в фильтрации
+-- (можно добавить по желанию, но они уже покрыты частью индексов)
+
+-- Например, для поля type в component уже есть comp_prod_type_idx (вместе с product_id), но если нужен поиск только по типу, можно отдельный индекс.
+-- Однако в моделях Django индексы для одиночных полей не указаны, поэтому ограничимся вышеперечисленными.

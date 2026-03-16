@@ -104,14 +104,19 @@ class ComponentService:
         """
         Import product component structure and tech processes from an XML document.
 
-        Assumptions based on the provided example:
+        Assumptions based on the provided example (and later corrections):
         - Root element contains <product> with nested <components>.
         - Each <component> has attributes: id (XML identifier), name, type, quantity.
         - Nested <tech_process>/<operation> describe operations for a component.
-        - Operation dependencies are expressed as:
-          <dependencies><depends_on operation_id="1"/></dependencies>
-          and are stored in Component.dependencies JSON as:
-          {"operations": [{"sequence": int, "depends_on": [int, ...]}, ...]}.
+        - Operation timing is supported via attributes on <operation>:
+          - prep_time (setup/debug time)
+          - unit_time (per-unit time)
+        - Operation dependencies can be expressed in multiple ways (to be backward compatible):
+          - legacy: <dependencies><depends_on operation_id="2"/></dependencies>
+          - reference-based: <dependencies><dependency ref="op:2"/></dependencies>
+            (also supports <depends_on ref="op:2"> and <depends_on operation_ref="op:2">)
+        - Dependencies are stored in Component.dependencies JSON as:
+          {"operations": [{"sequence": int, "depends_on": [str|int, ...]}, ...]}.
         - Child components are nested under <children>.
         """
         product = self.product_repo.get_by_id(product_id)
@@ -143,6 +148,42 @@ class ComponentService:
 
         xml_id_to_component: dict[str, Component] = {}
 
+        def _get_int_attr(e: ET.Element, name: str) -> Optional[int]:
+            raw = e.get(name)
+            if raw is None or raw == "":
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                return None
+
+        def _parse_dependency_refs(deps_elem: Optional[ET.Element]) -> list[str | int]:
+            if deps_elem is None:
+                return []
+
+            result: list[str | int] = []
+
+            for dep in deps_elem:
+                # Supported tags: dependency / depends_on (anything else is ignored)
+                if dep.tag not in {"dependency", "depends_on"}:
+                    continue
+
+                # New style: ref="op:2" / operation_ref="op:2"
+                ref = dep.get("ref") or dep.get("operation_ref")
+                if ref:
+                    result.append(ref)
+                    continue
+
+                # Legacy style: operation_id="2"
+                op_id = dep.get("operation_id")
+                if op_id is not None:
+                    try:
+                        result.append(int(op_id))
+                    except ValueError:
+                        continue
+
+            return result
+
         def _parse_component(elem: ET.Element, parent: Optional[Component]) -> Component:
             xml_id = elem.get("id")
             name = elem.get("name") or ""
@@ -167,35 +208,30 @@ class ComponentService:
                 operations_meta: list[dict[str, Any]] = []
                 for op_elem in tech_process_elem.findall("operation"):
                     op_name = op_elem.get("name") or ""
-                    seq_raw = op_elem.get("sequence")
-                    sequence = int(seq_raw) if seq_raw is not None else None
+                    sequence = _get_int_attr(op_elem, "sequence")
+                    prep_time = _get_int_attr(op_elem, "prep_time")
+                    unit_time = _get_int_attr(op_elem, "unit_time")
 
                     tech_proc = self.tech_process_repo.create(
                         name=op_name,
                         description="",
                         required_qualification="",
                         equipment_required=None,
-                        prep_time=None,
-                        unit_time=None,
+                        prep_time=prep_time,
+                        unit_time=unit_time,
                         sequence_order=sequence,
                     )
                     ComponentTechProcess.objects.create(component=component, tech_process=tech_proc)
 
-                    depends_on_ids: list[int] = []
                     deps_elem = op_elem.find("dependencies")
-                    if deps_elem is not None:
-                        for dep in deps_elem.findall("depends_on"):
-                            dep_raw = dep.get("operation_id")
-                            if dep_raw is not None:
-                                try:
-                                    depends_on_ids.append(int(dep_raw))
-                                except ValueError:
-                                    continue
+                    depends_on = _parse_dependency_refs(deps_elem)
 
                     operations_meta.append(
                         {
                             "sequence": sequence,
-                            "depends_on": depends_on_ids,
+                            "depends_on": depends_on,
+                            "prep_time": prep_time,
+                            "unit_time": unit_time,
                         }
                     )
 
