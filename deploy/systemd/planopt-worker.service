@@ -1,0 +1,18 @@
+[Unit]
+Description=PlanOptimization Celery Worker
+After=network.target redis-server.service postgresql.service
+Requires=redis-server.service postgresql.service
+
+[Service]
+Type=simple
+User=planopt
+Group=planopt
+WorkingDirectory=/opt/planopt/app
+EnvironmentFile=/opt/planopt/app/.env
+ExecStart=/opt/planopt/venv/bin/celery -A production_planner worker -l info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

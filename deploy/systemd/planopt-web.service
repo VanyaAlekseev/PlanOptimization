@@ -1,0 +1,18 @@
+[Unit]
+Description=PlanOptimization Django (Gunicorn)
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=planopt
+Group=planopt
+WorkingDirectory=/opt/planopt/app
+EnvironmentFile=/opt/planopt/app/.env
+ExecStart=/opt/planopt/venv/bin/gunicorn production_planner.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

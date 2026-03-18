@@ -1,12 +1,11 @@
 import { Box, CircularProgress, FormControl, InputLabel, MenuItem, Paper, Select, Typography } from "@mui/material";
-// @ts-expect-error package has no types
-import { Timeline, TimelineData } from "react-gantt-timeline";
 import { useEffect, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
 
 import { api } from "../api/client";
 import type { PlanningCpmResultDto, ProjectDto } from "../api/types";
 import { useAppSelector } from "../store";
+import { SimpleGantt, SimpleGanttTask } from "../components/SimpleGantt";
 
 export const PlanningPage = () => {
   const { enqueueSnackbar } = useSnackbar();
@@ -35,7 +34,7 @@ export const PlanningPage = () => {
     void load();
   }, [selectedProjectId, enqueueSnackbar]);
 
-  const data: TimelineData[] = useMemo(() => {
+  const tasks: SimpleGanttTask[] = useMemo(() => {
     if (!cpmResult) return [];
     const base = new Date();
     const dayMs = 24 * 60 * 60 * 1000;
@@ -44,7 +43,7 @@ export const PlanningPage = () => {
       start: new Date(base.getTime() + op.earliest_start * dayMs),
       end: new Date(base.getTime() + op.earliest_finish * dayMs),
       name: op.name,
-      color: Math.abs(op.total_float) < 1e-6 ? "#d32f2f" : "#1565c0"
+      isCritical: Math.abs(op.total_float) < 1e-6
     }));
   }, [cpmResult]);
 
@@ -77,7 +76,7 @@ export const PlanningPage = () => {
         <CircularProgress />
       ) : (
         <Paper sx={{ p: 2 }}>
-          <Timeline data={data} />
+          <SimpleGantt tasks={tasks} />
         </Paper>
       )}
     </Box>

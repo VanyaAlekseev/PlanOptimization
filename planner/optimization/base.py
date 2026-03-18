@@ -45,7 +45,19 @@ def build_operation_graph(components: List[Component]) -> Tuple[Dict[OperationId
 
         for seq, tp in by_seq.items():
             op_id: OperationId = (component.id, seq)
-            duration = float(tp.unit_time or 1)
+            if component.quantity is None:
+                raise ValueError(
+                    f"Component quantity is required to compute operation duration. component_id={component.id} sequence={seq}"
+                )
+            if tp.prep_time is None or tp.unit_time is None:
+                raise ValueError(
+                    f"TechProcess timing is required to compute operation duration. component_id={component.id} sequence={seq} tp_id={tp.id}"
+                )
+
+            # Трудоёмкость операции:
+            # - время отладки/подготовки: prep_time
+            # - штучное время: unit_time на одну единицу * quantity
+            duration = float(tp.prep_time) + float(tp.unit_time) * float(component.quantity)
             operations[op_id] = Operation(
                 id=op_id,
                 name=tp.name,

@@ -24,12 +24,10 @@ services:
       - redis_data:/data
 
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: planopt/web:${PLANOPT_TAG:-offline}
     environment:
       DJANGO_DEBUG: "0"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       POSTGRES_DB: ${POSTGRES_DB:-production_planner}
       POSTGRES_USER: ${POSTGRES_USER:-planner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-planner}
@@ -45,15 +43,18 @@ services:
         condition: service_started
     ports:
       - "8000:8000"
-    command: ["/bin/sh", "-c", "chmod +x docker/entrypoint.sh && docker/entrypoint.sh gunicorn production_planner.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "chmod +x docker/entrypoint.sh && docker/entrypoint.sh gunicorn production_planner.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+      ]
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: planopt/web:${PLANOPT_TAG:-offline}
     environment:
       DJANGO_DEBUG: "0"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
       POSTGRES_DB: ${POSTGRES_DB:-production_planner}
       POSTGRES_USER: ${POSTGRES_USER:-planner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-planner}
@@ -70,9 +71,7 @@ services:
     command: ["celery", "-A", "production_planner", "worker", "-l", "info"]
 
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
+    image: planopt/frontend:${PLANOPT_TAG:-offline}
     depends_on:
       - web
     ports:
