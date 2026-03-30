@@ -25,6 +25,7 @@ services:
 
   web:
     image: planopt/web:${PLANOPT_TAG:-offline}
+    restart: unless-stopped
     environment:
       DJANGO_DEBUG: "0"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
@@ -47,11 +48,12 @@ services:
       [
         "/bin/sh",
         "-c",
-        "chmod +x docker/entrypoint.sh && docker/entrypoint.sh gunicorn production_planner.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+        "sed -i 's/\\r$//' /app/docker/entrypoint.sh && chmod +x /app/docker/entrypoint.sh && sh /app/docker/entrypoint.sh gunicorn production_planner.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
       ]
 
   worker:
     image: planopt/web:${PLANOPT_TAG:-offline}
+    restart: unless-stopped
     environment:
       DJANGO_DEBUG: "0"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
@@ -72,6 +74,7 @@ services:
 
   frontend:
     image: planopt/frontend:${PLANOPT_TAG:-offline}
+    restart: unless-stopped
     depends_on:
       - web
     ports:

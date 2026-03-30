@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <project id="pr_001" name="Разработка блока управления БУ-2000">
 	<product id="prod_001" code="БУ-2000" name="Блок управления" type="аппаратное средство">
 		<components>
@@ -13,15 +13,12 @@
 
 				<children>
 					<component id="comp_002" name="Микроконтроллер STM32F407" type="purchase" quantity="1">
-						<tech_process/>
 					</component>
 
 					<component id="comp_003" name="Конденсатор 10мкФ 50В" type="purchase" quantity="10">
-						<tech_process/>
 					</component>
 
 					<component id="comp_004" name="Разъем USB" type="purchase" quantity="1">
-						<tech_process/>
 					</component>
 
 					<component id="comp_005" name="Печатная плата" type="detail" quantity="1">
@@ -53,14 +50,12 @@
 					</component>
 
 					<component id="comp_009" name="Винты М3х8" type="purchase" quantity="8">
-						<tech_process/>
 					</component>
 				</children>
 			</component>
 
 			<!-- Компонент: Блок питания (покупной) -->
 			<component id="comp_010" name="Блок питания 24В 3А" type="purchase" quantity="1">
-				<tech_process/>
 			</component>
 		</components>
 

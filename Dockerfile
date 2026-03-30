@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+# Normalize line endings (helps if files were created/edited on Windows).
+RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh || true
+
 EXPOSE 8000
 
 CMD ["gunicorn", "production_planner.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

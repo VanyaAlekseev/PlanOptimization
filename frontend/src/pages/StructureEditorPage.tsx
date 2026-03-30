@@ -61,7 +61,8 @@ export const StructureEditorPage = () => {
           <Tree<ComponentNode>
             ref={treeRef}
             data={tree}
-            getChildren={(n) => n.children ?? []}
+            // react-arborist использует childrenAccessor, чтобы извлекать children из data-узла
+            childrenAccessor={(d) => d.children ?? null}
             onSelect={(nodes) => dispatch(setSelectedNodeId(nodes[0]?.id ?? null))}
           >
             {({ node }) => (
