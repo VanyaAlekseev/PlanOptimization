@@ -1,4 +1,5 @@
 import {
+  Button,
   CircularProgress,
   FormControl,
   InputLabel,
@@ -25,6 +26,7 @@ export const AlgorithmsComparePage = () => {
   const [projectId, setProjectId] = useState<number | "">("");
   const [rows, setRows] = useState<AlgorithmComparisonDto[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>("");
 
   useEffect(() => {
     if (!projectId) return;
@@ -41,6 +43,41 @@ export const AlgorithmsComparePage = () => {
     };
     void load();
   }, [projectId, enqueueSnackbar]);
+
+  const handleRunCompare = async () => {
+    try {
+      if (!projectId) {
+        enqueueSnackbar("Выберите проект", { variant: "warning" });
+        return;
+      }
+      setLoading(true);
+      await api.post("/planning/compare-and-save/", { project_id: projectId, params: {} });
+      const { data } = await api.get<AlgorithmComparisonDto[]>("/algorithm-comparisons/");
+      setRows(data.filter((r) => r.project === projectId));
+      enqueueSnackbar("Сравнение алгоритмов выполнено и сохранено", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Ошибка запуска сравнения", { variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAlgorithm = async () => {
+    try {
+      if (!projectId || !selectedAlgorithm) {
+        enqueueSnackbar("Выберите проект и алгоритм", { variant: "warning" });
+        return;
+      }
+      await api.post("/planning/select-algorithm/", {
+        project_id: projectId,
+        algorithm: selectedAlgorithm.toLowerCase(),
+        params: {}
+      });
+      enqueueSnackbar(`Алгоритм ${selectedAlgorithm} закреплен за проектом`, { variant: "success" });
+    } catch {
+      enqueueSnackbar("Ошибка закрепления алгоритма", { variant: "error" });
+    }
+  };
 
   return (
     <>
@@ -66,6 +103,9 @@ export const AlgorithmsComparePage = () => {
           ))}
         </Select>
       </FormControl>
+      <Button sx={{ ml: 2, mb: 2 }} variant="contained" onClick={() => void handleRunCompare()}>
+        Запустить сравнение
+      </Button>
 
       {loading ? (
         <CircularProgress />
@@ -74,6 +114,7 @@ export const AlgorithmsComparePage = () => {
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell>Выбор</TableCell>
                 <TableCell>Алгоритм</TableCell>
                 <TableCell>Время проекта</TableCell>
                 <TableCell>Человеко-часы</TableCell>
@@ -83,6 +124,13 @@ export const AlgorithmsComparePage = () => {
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
+                  <TableCell>
+                    <input
+                      type="radio"
+                      checked={selectedAlgorithm === row.algorithm_name}
+                      onChange={() => setSelectedAlgorithm(row.algorithm_name)}
+                    />
+                  </TableCell>
                   <TableCell>{row.algorithm_name}</TableCell>
                   <TableCell>{row.total_duration}</TableCell>
                   <TableCell>{row.resource_utilization}</TableCell>
@@ -91,6 +139,9 @@ export const AlgorithmsComparePage = () => {
               ))}
             </TableBody>
           </Table>
+          <Button sx={{ mt: 2 }} variant="contained" onClick={() => void handleSelectAlgorithm()}>
+            Закрепить выбранный алгоритм за проектом
+          </Button>
         </Paper>
       )}
     </>

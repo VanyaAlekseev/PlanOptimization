@@ -30,6 +30,18 @@ export interface ComponentTreeDto {
   roots: ComponentTreeNodeDto[];
 }
 
+export interface ComponentDto {
+  id: number;
+  product: number;
+  parent_component: number | null;
+  name: string;
+  type: string;
+  quantity: number | null;
+  parameters: Record<string, unknown> | null;
+  labor_per_operation: number | null;
+  dependencies: Record<string, unknown> | null;
+}
+
 export interface AlgorithmComparisonDto {
   id: number;
   project: number;

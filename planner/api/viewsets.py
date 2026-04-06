@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from io import BytesIO
 from typing import Any, Dict
 
+from django.http import HttpResponse
+from django.utils import timezone
 from celery.result import AsyncResult
+from openpyxl import Workbook
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -30,6 +36,7 @@ from planner.repositories.personnel import PersonnelRepository
 from planner.repositories.product import ProductRepository
 from planner.repositories.production_plan import ProductionPlanRepository
 from planner.repositories.project import ProjectRepository
+from planner.repositories.tech_process import TechProcessRepository
 from planner.services.component_service import ComponentService
 from planner.services.optimization_service import OptimizationService
 from planner.services.project_management_service import ProjectManagementService
@@ -48,7 +55,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project_id = int(pk or "0")
         product_repo = ProductRepository()
         component_repo = ComponentRepository()
-        component_service = ComponentService(component_repo=component_repo, product_repo=product_repo, tech_process_repo=None)  # type: ignore[arg-type]
+        component_service = ComponentService(
+            component_repo=component_repo,
+            product_repo=product_repo,
+            tech_process_repo=TechProcessRepository(),
+        )
 
         products = list(product_repo.list_by_project(project_id))
         structures = []
@@ -97,8 +108,10 @@ class ComponentViewSet(viewsets.ModelViewSet):
     def import_xml(self, request: Request) -> Response:
         product_id = int(request.data.get("product_id", 0))
         xml_content = request.data.get("xml_content", "")
+        xml_file = request.FILES.get("xml_file")
+        if xml_file is not None:
+            xml_content = xml_file.read().decode("utf-8")
         overwrite = bool(request.data.get("overwrite", False))
-        from planner.repositories.tech_process import TechProcessRepository
 
         svc = ComponentService(
             component_repo=ComponentRepository(),
@@ -198,6 +211,82 @@ class PlanningViewSet(viewsets.ViewSet):
         result = service.compare_algorithms(project_id, **params)
         return Response(result)
 
+    @action(detail=False, methods=["post"], url_path="compare-and-save")
+    def compare_and_save(self, request: Request) -> Response:
+        project_id = int(request.data.get("project_id", 0))
+        if project_id <= 0:
+            return Response({"detail": "project_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        params = request.data.get("params", {}) or {}
+        service = OptimizationService(
+            project_repo=ProjectRepository(),
+            product_repo=ProductRepository(),
+            component_repo=ComponentRepository(),
+        )
+        result = service.compare_algorithms(project_id, **params)
+
+        AlgorithmComparison.objects.filter(project_id=project_id).delete()
+        now = timezone.now().date()
+
+        cpm_time = float(result.get("cpm", {}).get("total_duration", 0) or 0)
+        ga_fit = float(result.get("ga", {}).get("best_fitness", 0) or 0)
+        sa_cost = float(result.get("sa", {}).get("best_cost", 0) or 0)
+
+        records = [
+            AlgorithmComparison(
+                project_id=project_id,
+                algorithm_name="CPM",
+                total_duration=cpm_time,
+                resource_utilization=0.0,
+                deadline_satisfaction=1.0 if cpm_time > 0 else 0.0,
+                computed_date=now,
+            ),
+            AlgorithmComparison(
+                project_id=project_id,
+                algorithm_name="GA",
+                total_duration=ga_fit,
+                resource_utilization=0.0,
+                deadline_satisfaction=1.0 if ga_fit > 0 else 0.0,
+                computed_date=now,
+            ),
+            AlgorithmComparison(
+                project_id=project_id,
+                algorithm_name="SA",
+                total_duration=sa_cost,
+                resource_utilization=0.0,
+                deadline_satisfaction=1.0 if sa_cost > 0 else 0.0,
+                computed_date=now,
+            ),
+        ]
+        AlgorithmComparison.objects.bulk_create(records)
+        return Response({"status": "saved", "project_id": project_id, "result": result})
+
+    @action(detail=False, methods=["post"], url_path="select-algorithm")
+    def select_algorithm(self, request: Request) -> Response:
+        project_id = int(request.data.get("project_id", 0))
+        algorithm = str(request.data.get("algorithm", "")).lower()
+        if project_id <= 0 or algorithm not in {"cpm", "ga", "sa"}:
+            return Response({"detail": "project_id and valid algorithm are required"}, status=status.HTTP_400_BAD_REQUEST)
+        params = request.data.get("params", {}) or {}
+
+        service = OptimizationService(
+            project_repo=ProjectRepository(),
+            product_repo=ProductRepository(),
+            component_repo=ComponentRepository(),
+        )
+        compare_result = service.compare_algorithms(project_id, **params)
+        selected_result = compare_result.get(algorithm, {})
+
+        plan = ProductionPlan.objects.create(
+            project_id=project_id,
+            algorithm_used=algorithm.upper(),
+            created_date=timezone.now().date(),
+            status="selected",
+            schedule=selected_result,
+            actual_data={},
+            deviations={},
+        )
+        return Response({"status": "selected", "project_id": project_id, "algorithm": algorithm, "plan_id": plan.id})
+
     @action(detail=False, methods=["get"], url_path="task-status")
     def task_status(self, request: Request) -> Response:
         task_id = request.query_params.get("task_id")
@@ -217,12 +306,63 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="gantt")
     def gantt(self, request: Request) -> Response:
         project_id = int(request.query_params.get("project_id", "0"))
-        return Response({"project_id": project_id, "gantt": {"status": "stub", "data": []}})
+        selected_plan = (
+            ProductionPlan.objects.filter(project_id=project_id).order_by("-created_date", "-id").first()
+        )
+
+        buffer = BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=A4)
+        y = 800
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(40, y, f"Gantt Report - Project {project_id}")
+        y -= 30
+        pdf.setFont("Helvetica", 11)
+        if selected_plan is None:
+            pdf.drawString(40, y, "No production plan found.")
+        else:
+            pdf.drawString(40, y, f"Plan ID: {selected_plan.id}")
+            y -= 20
+            pdf.drawString(40, y, f"Algorithm: {selected_plan.algorithm_used}")
+            y -= 20
+            pdf.drawString(40, y, f"Status: {selected_plan.status}")
+            y -= 20
+            ops_count = 0
+            if isinstance(selected_plan.schedule, dict):
+                if "operations" in selected_plan.schedule and isinstance(selected_plan.schedule["operations"], dict):
+                    ops_count = len(selected_plan.schedule["operations"])
+                elif "schedule" in selected_plan.schedule and isinstance(selected_plan.schedule["schedule"], list):
+                    ops_count = len(selected_plan.schedule["schedule"])
+            pdf.drawString(40, y, f"Operations in schedule: {ops_count}")
+        pdf.showPage()
+        pdf.save()
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="gantt_project_{project_id}.pdf"'
+        return response
 
     @action(detail=False, methods=["get"], url_path="tech-card")
     def tech_card(self, request: Request) -> Response:
         project_id = int(request.query_params.get("project_id", "0"))
-        return Response({"project_id": project_id, "tech_card": {"status": "stub", "data": []}})
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "TechCard"
+        ws.append(["Project ID", "Algorithm", "Plan Status", "Created Date"])
+        plans = ProductionPlan.objects.filter(project_id=project_id).order_by("-created_date", "-id")
+        for p in plans:
+            ws.append([project_id, p.algorithm_used, p.status, str(p.created_date or "")])
+        if plans.count() == 0:
+            ws.append([project_id, "", "No plans", ""])
+
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+        response = HttpResponse(
+            out.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="tech_card_project_{project_id}.xlsx"'
+        return response
 
 
 class ProductionPlanViewSet(viewsets.ModelViewSet):

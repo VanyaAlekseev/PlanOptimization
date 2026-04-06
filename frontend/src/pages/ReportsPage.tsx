@@ -1,20 +1,26 @@
-import { Button, Grid, Paper, TextField, Typography } from "@mui/material";
-import { useState } from "react";
+import { Button, FormControl, Grid, InputLabel, MenuItem, Paper, Select, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
 
 import { api } from "../api/client";
-
-const downloadJson = (data: unknown, filename: string) => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-};
+import type { ProjectDto } from "../api/types";
 
 export const ReportsPage = () => {
   const { enqueueSnackbar } = useSnackbar();
   const [projectId, setProjectId] = useState<number | "">("");
+  const [projects, setProjects] = useState<ProjectDto[]>([]);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const { data } = await api.get<ProjectDto[]>("/projects/");
+        setProjects(data);
+      } catch {
+        enqueueSnackbar("Не удалось загрузить список проектов", { variant: "error" });
+      }
+    };
+    void loadProjects();
+  }, [enqueueSnackbar]);
 
   const handleDownload = async (type: "gantt" | "tech-card") => {
     try {
@@ -23,9 +29,17 @@ export const ReportsPage = () => {
         return;
       }
       const url = type === "gantt" ? "/reports/gantt/" : "/reports/tech-card/";
-      const { data } = await api.get(url, { params: { project_id: projectId } });
-      downloadJson(data, `${type}-project-${projectId}.json`);
-      enqueueSnackbar("Отчёт сгенерирован (JSON-заглушка)", { variant: "success" });
+      const response = await api.get<Blob>(url, {
+        params: { project_id: projectId },
+        responseType: "blob"
+      });
+      const ext = type === "gantt" ? "pdf" : "xlsx";
+      const blob = response.data;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${type}-project-${projectId}.${ext}`;
+      link.click();
+      enqueueSnackbar("Отчёт сформирован и скачан", { variant: "success" });
     } catch {
       enqueueSnackbar("Ошибка генерации отчёта", { variant: "error" });
     }
@@ -37,19 +51,27 @@ export const ReportsPage = () => {
         Отчёты и аналитика
       </Typography>
       <Typography variant="subtitle1" gutterBottom>
-        Пока отчёты скачиваются в виде JSON-заглушек. Позже backend начнёт отдавать PDF/Excel.
+        Отчёты формируются на backend и скачиваются в PDF/XLSX.
       </Typography>
-      <TextField
-        label="ID проекта"
-        type="number"
-        value={projectId}
-        onChange={(e) => setProjectId(e.target.value === "" ? "" : Number(e.target.value))}
-        sx={{ mb: 2 }}
-      />
+      <FormControl sx={{ minWidth: 280, mb: 2 }}>
+        <InputLabel id="reports-project-select-label">Проект</InputLabel>
+        <Select
+          labelId="reports-project-select-label"
+          label="Проект"
+          value={projectId}
+          onChange={(e) => setProjectId(e.target.value === "" ? "" : Number(e.target.value))}
+        >
+          {projects.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              {p.id}: {p.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
       <Grid container spacing={2}>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Диаграмма Ганта (JSON сейчас, PDF позже)</Typography>
+            <Typography variant="h6">Диаграмма Ганта (PDF)</Typography>
             <Button sx={{ mt: 2 }} variant="contained" onClick={() => void handleDownload("gantt")}>
               Скачать
             </Button>
@@ -57,7 +79,7 @@ export const ReportsPage = () => {
         </Grid>
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2 }}>
-            <Typography variant="h6">Технологическая карта</Typography>
+            <Typography variant="h6">Технологическая карта (Excel)</Typography>
             <Button sx={{ mt: 2 }} variant="contained" onClick={() => void handleDownload("tech-card")}>
               Скачать
             </Button>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project id="pr_100" name="Тестовый проект">
+  <product id="prod_100" code="TEST-100" name="Тестовое изделие" type="аппаратное средство">
+    <components>
+      <component id="comp_100" name="Сборка A" type="assembly" quantity="1">
+        <tech_process>
+          <operation name="Подготовка" sequence="1" prep_time="2" unit_time="1"/>
+          <operation name="Монтаж" sequence="2" prep_time="1" unit_time="3" depends_on_operation_id="1"/>
+          <operation name="Тест" sequence="3" prep_time="1" unit_time="2" depends_on_operation_id="2"/>
+        </tech_process>
+        <children>
+          <component id="comp_101" name="Деталь A1" type="detail" quantity="2">
+            <tech_process>
+              <operation name="Резка" sequence="1" prep_time="1" unit_time="1"/>
+            </tech_process>
+          </component>
+          <component id="comp_102" name="Покупной элемент" type="purchase" quantity="4">
+            <tech_process/>
+          </component>
+        </children>
+      </component>
+    </components>
+  </product>
+</project>
+
