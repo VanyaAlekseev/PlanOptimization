@@ -3,10 +3,13 @@
 export interface ProjectDto {
   id: number;
   name: string;
+  description: string;
   status: string;
   start_date: string | null;
   deadline: string | null;
   end_date: string | null;
+  total_labor_planned: number | null;
+  total_labor_actual: number | null;
 }
 
 export interface ProductDto {
@@ -15,6 +18,9 @@ export interface ProductDto {
   name: string;
   code: string;
   type: string;
+  structure_tree: Record<string, unknown> | null;
+  tech_requirements: string;
+  norm_hours: number | null;
 }
 
 export interface ComponentTreeNodeDto {
@@ -52,6 +58,27 @@ export interface AlgorithmComparisonDto {
   computed_date: string | null;
 }
 
+export interface EquipmentDto {
+  id: number;
+  name: string;
+  type: string;
+  specifications: Record<string, unknown> | null;
+  work_schedule: Record<string, unknown> | null;
+  maintenance_requirements: string;
+  cost_per_hour: number | null;
+}
+
+export interface PersonnelDto {
+  id: number;
+  full_name: string;
+  position: string;
+  qualification: string;
+  specialization: string;
+  work_schedule: Record<string, unknown> | null;
+  monthly_hours_norm: number | null;
+  current_load_percent: number | null;
+}
+
 export interface PlanningCpmOperationDto {
   component_id: number;
   sequence: number;
@@ -76,5 +103,31 @@ export interface PlanningCompareResultDto {
   cpm: PlanningCpmResultDto;
   ga: unknown;
   sa: unknown;
+}
+
+export interface ChartPointDto {
+  step: number;
+  value: number;
+}
+
+export interface AlgorithmChartDto {
+  kpi: number;
+  time_series: ChartPointDto[];
+  money_series: ChartPointDto[];
+}
+
+export interface PlanningChartDataDto {
+  project_id: number;
+  hour_rate: number;
+  cpm: AlgorithmChartDto;
+  ga: AlgorithmChartDto;
+  sa: AlgorithmChartDto;
+}
+
+export interface ProjectResourceSummaryDto {
+  project_id: number;
+  personnel_count: number;
+  equipment_count: number;
+  equipment_types: string[];
 }
 

@@ -1,0 +1,31 @@
+@startuml
+title Сравнение и выбор алгоритма - блок-схема
+
+start
+:Получить project_id и params;
+:Вызвать compare_algorithms(project_id);
+
+:Запустить CPM.optimize;
+:Запустить GA.optimize;
+:Запустить SA.optimize;
+
+:Собрать результаты в единый объект\n{cpm, ga, sa};
+:Рассчитать/подготовить метрики\nдля сравнения;
+:Показать результаты пользователю;
+
+if (Сохранить сравнение?) then (да)
+  :Очистить старые записи AlgorithmComparison\nпо проекту;
+  :Сохранить новые записи\n(CPM, GA, SA);
+endif
+
+if (Пользователь выбрал алгоритм?) then (да)
+  :Создать ProductionPlan\nс algorithm_used и schedule;
+  :Статус плана = selected;
+  :Вернуть plan_id;
+  stop
+else (нет)
+  :Оставить только сравнительные результаты;
+  stop
+endif
+
+@enduml

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from planner.models import (
@@ -15,12 +17,42 @@ from planner.models import (
     Project,
     TechProcess,
 )
+from planner.repositories.equipment import EquipmentRepository
+from planner.repositories.personnel import PersonnelRepository
+from planner.repositories.project import ProjectRepository
+from planner.services.project_management_service import ProjectManagementService
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = "__all__"
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get("request")
+        if request is None or request.method != "POST":
+            return attrs
+
+        required_hours = Decimal(str(attrs.get("total_labor_planned") or 0))
+        if required_hours <= 0:
+            return attrs
+
+        svc = ProjectManagementService(
+            project_repo=ProjectRepository(),
+            equipment_repo=EquipmentRepository(),
+            personnel_repo=PersonnelRepository(),
+        )
+        try:
+            svc.validate_resource_capacity_for_project(
+                required_hours=required_hours,
+                start_date=attrs.get("start_date"),
+                deadline=attrs.get("deadline"),
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"resources": str(exc)}) from exc
+
+        return attrs
 
 
 class ProductSerializer(serializers.ModelSerializer):

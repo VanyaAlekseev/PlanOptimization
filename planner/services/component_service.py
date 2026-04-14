@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Optional
+import math
 import re
 from xml.etree import ElementTree as ET
 
@@ -133,7 +134,7 @@ class ComponentService:
 
         root = ET.fromstring(xml_content)
 
-        xml_product = root.find(".//product")
+        xml_product = root if root.tag == "product" else root.find(".//product")
         if xml_product is None:
             raise ValueError("XML does not contain <product> element")
 
@@ -158,7 +159,22 @@ class ComponentService:
             if raw is None or raw == "":
                 return None
             try:
-                return int(raw)
+                val = float(raw)
+                if val.is_integer():
+                    return int(val)
+                return None
+            except ValueError:
+                return None
+
+        def _get_time_attr(e: ET.Element, name: str) -> Optional[int]:
+            raw = e.get(name)
+            if raw is None or raw == "":
+                return None
+            try:
+                val = float(raw)
+                if val < 0:
+                    return None
+                return int(math.ceil(val))
             except ValueError:
                 return None
 
@@ -221,8 +237,9 @@ class ComponentService:
                 for op_elem in tech_process_elem.findall("operation"):
                     op_name = op_elem.get("name") or ""
                     sequence = _get_int_attr(op_elem, "sequence")
-                    prep_time = _get_int_attr(op_elem, "prep_time")
-                    unit_time = _get_int_attr(op_elem, "unit_time")
+                    prep_time = _get_time_attr(op_elem, "prep_time")
+                    unit_time = _get_time_attr(op_elem, "unit_time")
+                    equipment_required = op_elem.get("equipment") or op_elem.get("equipment_required")
                     if sequence is None:
                         raise ValueError(f"Operation sequence is required. Component XML id={elem.get('id')}")
                     if prep_time is None or unit_time is None:
@@ -233,9 +250,9 @@ class ComponentService:
 
                     tech_proc = self.tech_process_repo.create(
                         name=op_name,
-                        description="",
-                        required_qualification="",
-                        equipment_required=None,
+                        description=op_elem.get("description", ""),
+                        required_qualification=op_elem.get("required_qualification", ""),
+                        equipment_required={"name": equipment_required} if equipment_required else None,
                         prep_time=prep_time,
                         unit_time=unit_time,
                         sequence_order=sequence,
@@ -258,6 +275,7 @@ class ComponentService:
                             "depends_on": depends_on,
                             "prep_time": prep_time,
                             "unit_time": unit_time,
+                            "equipment": equipment_required or "",
                         }
                     )
 

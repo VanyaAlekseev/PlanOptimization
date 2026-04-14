@@ -1,4 +1,5 @@
-import { Box, Button, Grid, Paper, TextField, Typography } from "@mui/material";
+import { Box, Button, Checkbox, Grid, ListItemText, MenuItem, Paper, TextField, Typography } from "@mui/material";
+import { AxiosError } from "axios";
 import { Tree, TreeApi } from "react-arborist";
 import { useEffect, useRef, useState } from "react";
 import { useSnackbar } from "notistack";
@@ -6,7 +7,8 @@ import { useSnackbar } from "notistack";
 import { useAppDispatch, useAppSelector } from "../store";
 import { ComponentNode, setSelectedNodeId, setTree } from "../store/structureSlice";
 import { api } from "../api/client";
-import type { ComponentDto, ComponentTreeDto } from "../api/types";
+import type { ComponentDto, ComponentTreeDto, EquipmentDto, PersonnelDto, ProductDto, ProjectDto } from "../api/types";
+import { fetchProjects } from "../store/dashboardSlice";
 
 export const StructureEditorPage = () => {
   const dispatch = useAppDispatch();
@@ -16,10 +18,29 @@ export const StructureEditorPage = () => {
   const treeRef = useRef<TreeApi<ComponentNode>>(null);
   const [productId, setProductId] = useState<number | "">("");
   const [xmlFile, setXmlFile] = useState<File | null>(null);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProductName, setNewProductName] = useState("");
-  const [newProductCode, setNewProductCode] = useState("");
+  const [projectForm, setProjectForm] = useState<Partial<ProjectDto>>({
+    name: "",
+    description: "",
+    status: "draft",
+    start_date: null,
+    end_date: null,
+    deadline: null,
+    total_labor_planned: null,
+    total_labor_actual: null
+  });
+  const [productForm, setProductForm] = useState<Partial<ProductDto>>({
+    name: "",
+    code: "",
+    type: "assembly",
+    structure_tree: null,
+    tech_requirements: "",
+    norm_hours: null
+  });
   const [newProjectId, setNewProjectId] = useState<number | null>(null);
+  const [equipment, setEquipment] = useState<EquipmentDto[]>([]);
+  const [personnel, setPersonnel] = useState<PersonnelDto[]>([]);
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<number[]>([]);
+  const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<number[]>([]);
   const [componentForm, setComponentForm] = useState<{ name: string; type: string; quantity: number }>({
     name: "",
     type: "",
@@ -68,6 +89,22 @@ export const StructureEditorPage = () => {
     void loadSelected();
   }, [selectedNodeId, enqueueSnackbar]);
 
+  useEffect(() => {
+    const loadResources = async () => {
+      try {
+        const [eq, ps] = await Promise.all([
+          api.get<EquipmentDto[]>("/equipment/"),
+          api.get<PersonnelDto[]>("/personnel/")
+        ]);
+        setEquipment(eq.data);
+        setPersonnel(ps.data);
+      } catch {
+        enqueueSnackbar("Не удалось загрузить ресурсы. Управляйте ими на вкладке Ресурсы.", { variant: "warning" });
+      }
+    };
+    void loadResources();
+  }, [enqueueSnackbar]);
+
   const handleImportXml = async () => {
     try {
       if (!productId) {
@@ -76,6 +113,14 @@ export const StructureEditorPage = () => {
       }
       if (!xmlFile) {
         enqueueSnackbar("Выберите XML-файл", { variant: "warning" });
+        return;
+      }
+      const { data: targetProduct } = await api.get<ProductDto>(`/products/${productId}/`);
+      if (newProjectId && targetProduct.project !== newProjectId) {
+        enqueueSnackbar(
+          `Выбранное изделие #${productId} относится к проекту #${targetProduct.project}, а не к только что созданному #${newProjectId}`,
+          { variant: "error" }
+        );
         return;
       }
       const form = new FormData();
@@ -94,36 +139,57 @@ export const StructureEditorPage = () => {
 
   const handleCreateProjectAndProduct = async () => {
     try {
-      if (!newProjectName.trim() || !newProductName.trim()) {
+      if (!projectForm.name?.trim() || !productForm.name?.trim()) {
         enqueueSnackbar("Укажите название проекта и изделия", { variant: "warning" });
         return;
       }
-      const p = await api.post("/projects/", {
-        name: newProjectName,
-        description: "",
-        status: "draft",
-        start_date: null,
-        end_date: null,
-        deadline: null,
-        total_labor_planned: null,
-        total_labor_actual: null
-      });
+      const p = await api.post("/projects/", projectForm);
       const createdProjectId = p.data.id as number;
       setNewProjectId(createdProjectId);
       const product = await api.post("/products/", {
-        project: createdProjectId,
-        name: newProductName,
-        code: newProductCode,
-        type: "assembly",
-        structure_tree: null,
-        tech_requirements: "",
-        norm_hours: null
+        ...productForm,
+        project: createdProjectId
       });
       const createdProductId = product.data.id as number;
       setProductId(createdProductId);
+      await api.post(`/projects/${createdProjectId}/assign-resources/`, {
+        equipment_ids: selectedEquipmentIds,
+        personnel_ids: selectedPersonnelIds
+      });
+      await dispatch(fetchProjects());
       enqueueSnackbar(`Проект #${createdProjectId} и изделие #${createdProductId} созданы`, { variant: "success" });
+    } catch (err) {
+      const responseData = err instanceof AxiosError ? err.response?.data : null;
+      const detail =
+        typeof responseData === "string"
+          ? responseData
+          : typeof responseData === "object" && responseData
+            ? JSON.stringify(responseData)
+            : "Ошибка создания проекта/изделия";
+      enqueueSnackbar(detail, { variant: "error" });
+    }
+  };
+
+  const handleUpdateProduct = async () => {
+    try {
+      if (!productId) {
+        enqueueSnackbar("Укажите ID изделия", { variant: "warning" });
+        return;
+      }
+      await api.patch(`/products/${productId}/`, productForm);
+      enqueueSnackbar("Изделие обновлено", { variant: "success" });
     } catch {
-      enqueueSnackbar("Ошибка создания проекта/изделия", { variant: "error" });
+      enqueueSnackbar("Ошибка обновления изделия", { variant: "error" });
+    }
+  };
+
+  const handleLoadProduct = async () => {
+    try {
+      if (!productId) return;
+      const { data } = await api.get<ProductDto>(`/products/${productId}/`);
+      setProductForm(data);
+    } catch {
+      enqueueSnackbar("Не удалось загрузить изделие", { variant: "error" });
     }
   };
 
@@ -211,22 +277,93 @@ export const StructureEditorPage = () => {
           <TextField
             label="Название проекта"
             fullWidth
-            value={newProjectName}
-            onChange={(e) => setNewProjectName(e.target.value)}
+            value={projectForm.name ?? ""}
+            onChange={(e) => setProjectForm((prev) => ({ ...prev, name: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Описание проекта"
+            fullWidth
+            value={projectForm.description ?? ""}
+            onChange={(e) => setProjectForm((prev) => ({ ...prev, description: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Статус проекта"
+            fullWidth
+            value={projectForm.status ?? "draft"}
+            onChange={(e) => setProjectForm((prev) => ({ ...prev, status: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <Grid container spacing={1} sx={{ mb: 1 }}>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Start date"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={projectForm.start_date ?? ""}
+                onChange={(e) => setProjectForm((prev) => ({ ...prev, start_date: e.target.value || null }))}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                label="Deadline"
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                value={projectForm.deadline ?? ""}
+                onChange={(e) => setProjectForm((prev) => ({ ...prev, deadline: e.target.value || null }))}
+              />
+            </Grid>
+          </Grid>
+          <TextField
+            label="Плановые трудозатраты (ч)"
+            fullWidth
+            type="number"
+            value={projectForm.total_labor_planned ?? ""}
+            onChange={(e) =>
+              setProjectForm((prev) => ({
+                ...prev,
+                total_labor_planned: e.target.value === "" ? null : Number(e.target.value)
+              }))
+            }
             sx={{ mb: 1 }}
           />
           <TextField
             label="Название изделия"
             fullWidth
-            value={newProductName}
-            onChange={(e) => setNewProductName(e.target.value)}
+            value={productForm.name ?? ""}
+            onChange={(e) => setProductForm((prev) => ({ ...prev, name: e.target.value }))}
             sx={{ mb: 1 }}
           />
           <TextField
             label="Код изделия"
             fullWidth
-            value={newProductCode}
-            onChange={(e) => setNewProductCode(e.target.value)}
+            value={productForm.code ?? ""}
+            onChange={(e) => setProductForm((prev) => ({ ...prev, code: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Тип изделия"
+            fullWidth
+            value={productForm.type ?? ""}
+            onChange={(e) => setProductForm((prev) => ({ ...prev, type: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Тех. требования"
+            fullWidth
+            value={productForm.tech_requirements ?? ""}
+            onChange={(e) => setProductForm((prev) => ({ ...prev, tech_requirements: e.target.value }))}
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Нормо-часы"
+            fullWidth
+            type="number"
+            value={productForm.norm_hours ?? ""}
+            onChange={(e) => setProductForm((prev) => ({ ...prev, norm_hours: e.target.value === "" ? null : Number(e.target.value) }))}
             sx={{ mb: 1 }}
           />
           <Button variant="contained" onClick={() => void handleCreateProjectAndProduct()} sx={{ mb: 2 }}>
@@ -265,8 +402,75 @@ export const StructureEditorPage = () => {
           <Button variant="contained" onClick={() => void handleImportXml()}>
             Импортировать XML
           </Button>
+          <Button variant="outlined" onClick={() => void handleLoadProduct()} sx={{ ml: 1 }}>
+            Загрузить изделие
+          </Button>
+          <Button variant="outlined" onClick={() => void handleUpdateProduct()} sx={{ ml: 1 }}>
+            Сохранить изделие
+          </Button>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             XML загружается на backend `/api/components/import-xml/` как файл.
+          </Typography>
+          <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+            Ресурсы (просмотр)
+          </Typography>
+          <TextField
+            fullWidth
+            select
+            label="Выбрать оборудование (несколько)"
+            value={selectedEquipmentIds}
+            SelectProps={{
+              multiple: true,
+              renderValue: (selected) =>
+                (selected as number[])
+                  .map((id) => equipment.find((item) => item.id === id)?.name)
+                  .filter(Boolean)
+                  .join(", ")
+            }}
+            onChange={(e) => {
+              const raw = e.target.value as unknown as Array<number | string>;
+              setSelectedEquipmentIds(raw.map(Number));
+            }}
+            sx={{ mb: 1 }}
+          >
+            {equipment.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                <Checkbox checked={selectedEquipmentIds.indexOf(item.id) > -1} />
+                <ListItemText primary={`${item.name} (${item.type})`} />
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            fullWidth
+            select
+            label="Выбрать сотрудников (несколько)"
+            value={selectedPersonnelIds}
+            SelectProps={{
+              multiple: true,
+              renderValue: (selected) =>
+                (selected as number[])
+                  .map((id) => personnel.find((item) => item.id === id)?.full_name)
+                  .filter(Boolean)
+                  .join(", ")
+            }}
+            onChange={(e) => {
+              const raw = e.target.value as unknown as Array<number | string>;
+              setSelectedPersonnelIds(raw.map(Number));
+            }}
+            sx={{ mb: 1 }}
+          >
+            {personnel.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                <Checkbox checked={selectedPersonnelIds.indexOf(item.id) > -1} />
+                <ListItemText primary={`${item.full_name} (${item.position || "без должности"})`} />
+              </MenuItem>
+            ))}
+          </TextField>
+          <Typography variant="body2" color="text.secondary">
+            Выбранных: оборудование {selectedEquipmentIds.length}, сотрудники {selectedPersonnelIds.length}.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Создание/удаление ресурсов перенесено на вкладку "Ресурсы".
           </Typography>
         </Paper>
         <Paper sx={{ p: 2 }}>

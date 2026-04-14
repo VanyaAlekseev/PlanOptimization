@@ -5,6 +5,7 @@ import { Link as RouterLink, useLocation } from "react-router-dom";
 const navItems = [
   { label: "Дашборд", to: "/" },
   { label: "Структура изделия", to: "/structure" },
+  { label: "Ресурсы", to: "/resources" },
   { label: "Планировщик", to: "/planning" },
   { label: "Алгоритмы", to: "/algorithms" },
   { label: "Отчёты", to: "/reports" }

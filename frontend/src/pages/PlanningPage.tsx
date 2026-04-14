@@ -4,15 +4,23 @@ import { useSnackbar } from "notistack";
 
 import { api } from "../api/client";
 import type { PlanningCpmResultDto, ProjectDto } from "../api/types";
-import { useAppSelector } from "../store";
+import { useAppDispatch, useAppSelector } from "../store";
 import { SimpleGantt, SimpleGanttTask } from "../components/SimpleGantt";
+import { fetchProjects } from "../store/dashboardSlice";
 
 export const PlanningPage = () => {
+  const dispatch = useAppDispatch();
   const { enqueueSnackbar } = useSnackbar();
   const projects = useAppSelector((s) => s.dashboard.projects);
   const [selectedProjectId, setSelectedProjectId] = useState<number | "">("");
   const [loading, setLoading] = useState(false);
   const [cpmResult, setCpmResult] = useState<PlanningCpmResultDto | null>(null);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      void dispatch(fetchProjects());
+    }
+  }, [dispatch, projects.length]);
 
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -25,6 +33,11 @@ export const PlanningPage = () => {
           { project_id: selectedProjectId, algorithm: "cpm", async_run: false }
         );
         setCpmResult(data.result);
+        if (!data.result || Object.keys(data.result.operations ?? {}).length === 0) {
+          enqueueSnackbar("Для проекта нет операций. Проверьте, что XML импортирован в изделие этого проекта.", {
+            variant: "warning"
+          });
+        }
       } catch {
         enqueueSnackbar("Ошибка расчёта плана", { variant: "error" });
       } finally {

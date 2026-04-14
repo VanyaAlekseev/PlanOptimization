@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project id="pr_200" name="Блок питания">
+  <product id="prod_200" code="PSU-200" name="Импульсный блок питания" type="аппаратное средство">
+    <components>
+      <component id="comp_200" name="Плата управления" type="assembly" quantity="1">
+        <tech_process>
+          <operation name="Входной контроль платы" sequence="1" prep_time="1" unit_time="0.5"/>
+          <operation name="Монтаж SMD-компонентов" sequence="2" prep_time="3" unit_time="4" depends_on_operation_id="1"/>
+          <operation name="Пайка выводных элементов" sequence="3" prep_time="2" unit_time="3" depends_on_operation_id="2"/>
+          <operation name="Промывка и сушка" sequence="4" prep_time="1" unit_time="1" depends_on_operation_id="3"/>
+          <operation name="Электрический контроль" sequence="5" prep_time="2" unit_time="2" depends_on_operation_id="4"/>
+        </tech_process>
+        <children>
+          <component id="comp_201" name="Микроконтроллер" type="purchase" quantity="1">
+            <tech_process/>
+          </component>
+          <component id="comp_202" name="Силовой трансформатор" type="detail" quantity="1">
+            <tech_process>
+              <operation name="Намотка первичной обмотки" sequence="1" prep_time="2" unit_time="5"/>
+              <operation name="Намотка вторичной обмотки" sequence="2" prep_time="1" unit_time="3" depends_on_operation_id="1"/>
+              <operation name="Пропитка и сушка" sequence="3" prep_time="1" unit_time="2" depends_on_operation_id="2"/>
+            </tech_process>
+          </component>
+        </children>
+      </component>
+      <component id="comp_203" name="Радиатор охлаждения" type="detail" quantity="2">
+        <tech_process>
+          <operation name="Фрезеровка заготовки" sequence="1" prep_time="1" unit_time="2"/>
+          <operation name="Сверление отверстий" sequence="2" prep_time="0.5" unit_time="1" depends_on_operation_id="1"/>
+          <operation name="Анодирование" sequence="3" prep_time="2" unit_time="3" depends_on_operation_id="2"/>
+        </tech_process>
+      </component>
+    </components>
+  </product>
+</project>

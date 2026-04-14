@@ -7,6 +7,7 @@ import { PlanningPage } from "./pages/PlanningPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { StructureEditorPage } from "./pages/StructureEditorPage";
 import { AlgorithmsComparePage } from "./pages/AlgorithmsComparePage";
+import { ResourcesPage } from "./pages/ResourcesPage";
 
 const App = () => {
   return (
@@ -15,6 +16,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/structure" element={<StructureEditorPage />} />
+          <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/algorithms" element={<AlgorithmsComparePage />} />
           <Route path="/reports" element={<ReportsPage />} />

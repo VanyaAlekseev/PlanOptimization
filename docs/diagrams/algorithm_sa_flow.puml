@@ -1,0 +1,39 @@
+@startuml
+title SA - Блок-схема имитации отжига
+
+start
+:Получить project_id и параметры\n(T0, cooling_rate, iterations_per_temp);
+:Загрузить граф операций и длительности;
+
+if (Операции найдены?) then (да)
+  :Сформировать начальное решение;
+  :Вычислить current_cost и best_cost;
+  :temperature = T0;
+
+  while (temperature > epsilon?) is (да)
+    :Выполнить N итераций\nпри текущей температуре;
+    :Сгенерировать соседнее решение;
+    :Вычислить delta = neighbor_cost - current_cost;
+
+    if (delta < 0?) then (да)
+      :Принять соседнее решение;
+    else (нет)
+      :Принять с вероятностью\nexp(-delta/temperature);
+    endif
+
+    if (current_cost < best_cost?) then (да)
+      :Обновить best_solution;
+    endif
+
+    :temperature = temperature * cooling_rate;
+  endwhile (нет)
+
+  :Сформировать schedule по best_solution;
+  :Вернуть best_cost и schedule;
+  stop
+else (нет)
+  :Вернуть пустой результат\n(best_cost = 0);
+  stop
+endif
+
+@enduml

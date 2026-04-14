@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { useSnackbar } from "notistack";
 
 import { api } from "../api/client";
-import type { ProjectDto } from "../api/types";
+import type { AlgorithmComparisonDto, ProjectDto } from "../api/types";
 
 export const ReportsPage = () => {
   const { enqueueSnackbar } = useSnackbar();
   const [projectId, setProjectId] = useState<number | "">("");
   const [projects, setProjects] = useState<ProjectDto[]>([]);
+  const [comparisons, setComparisons] = useState<AlgorithmComparisonDto[]>([]);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -21,6 +22,22 @@ export const ReportsPage = () => {
     };
     void loadProjects();
   }, [enqueueSnackbar]);
+
+  useEffect(() => {
+    const loadComparisons = async () => {
+      if (!projectId) {
+        setComparisons([]);
+        return;
+      }
+      try {
+        const { data } = await api.get<AlgorithmComparisonDto[]>("/algorithm-comparisons/");
+        setComparisons(data.filter((x) => x.project === projectId));
+      } catch {
+        enqueueSnackbar("Не удалось загрузить метрики алгоритмов", { variant: "warning" });
+      }
+    };
+    void loadComparisons();
+  }, [projectId, enqueueSnackbar]);
 
   const handleDownload = async (type: "gantt" | "tech-card") => {
     try {
@@ -83,6 +100,22 @@ export const ReportsPage = () => {
             <Button sx={{ mt: 2 }} variant="contained" onClick={() => void handleDownload("tech-card")}>
               Скачать
             </Button>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6">KPI алгоритмов</Typography>
+            {comparisons.length === 0 ? (
+              <Typography color="text.secondary" sx={{ mt: 1 }}>
+                Нет сохраненных сравнений
+              </Typography>
+            ) : (
+              comparisons.map((row) => (
+                <Typography key={row.id} variant="body2" sx={{ mt: 1 }}>
+                  {row.algorithm_name}: T={row.total_duration}, U={row.resource_utilization}, D={row.deadline_satisfaction}
+                </Typography>
+              ))
+            )}
           </Paper>
         </Grid>
       </Grid>
