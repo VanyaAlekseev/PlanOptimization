@@ -16,7 +16,7 @@ import {
   Typography
 } from "@mui/material";
 import { AxiosError } from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
 
 import { useAppDispatch, useAppSelector } from "../store";
@@ -44,6 +44,33 @@ export const DashboardPage = () => {
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [resourceSummary, setResourceSummary] = useState<Record<number, ProjectResourceSummaryDto>>({});
   const [tab, setTab] = useState(0);
+  const [projectSearchName, setProjectSearchName] = useState("");
+  const [projectSearchStatus, setProjectSearchStatus] = useState("");
+  const [productSearchName, setProductSearchName] = useState("");
+  const [productSearchCode, setProductSearchCode] = useState("");
+  const [productSearchType, setProductSearchType] = useState("");
+
+  const filteredProjects = useMemo(() => {
+    const normalizedName = projectSearchName.trim().toLowerCase();
+    const normalizedStatus = projectSearchStatus.trim().toLowerCase();
+    return projects.filter((project) => {
+      const matchesName = !normalizedName || project.name.toLowerCase().includes(normalizedName);
+      const matchesStatus = !normalizedStatus || project.status.toLowerCase().includes(normalizedStatus);
+      return matchesName && matchesStatus;
+    });
+  }, [projects, projectSearchName, projectSearchStatus]);
+
+  const filteredProducts = useMemo(() => {
+    const normalizedName = productSearchName.trim().toLowerCase();
+    const normalizedCode = productSearchCode.trim().toLowerCase();
+    const normalizedType = productSearchType.trim().toLowerCase();
+    return products.filter((product) => {
+      const matchesName = !normalizedName || product.name.toLowerCase().includes(normalizedName);
+      const matchesCode = !normalizedCode || (product.code ?? "").toLowerCase().includes(normalizedCode);
+      const matchesType = !normalizedType || (product.type ?? "").toLowerCase().includes(normalizedType);
+      return matchesName && matchesCode && matchesType;
+    });
+  }, [products, productSearchName, productSearchCode, productSearchType]);
 
   useEffect(() => {
     void dispatch(fetchProjects());
@@ -185,8 +212,27 @@ export const DashboardPage = () => {
       {loading ? (
         <CircularProgress />
       ) : tab === 0 ? (
-        <Grid container spacing={2}>
-          {projects.map((p) => {
+        <>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Поиск по названию проекта"
+                value={projectSearchName}
+                onChange={(e) => setProjectSearchName(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Поиск по статусу проекта"
+                value={projectSearchStatus}
+                onChange={(e) => setProjectSearchStatus(e.target.value)}
+              />
+            </Grid>
+          </Grid>
+          <Grid container spacing={2}>
+            {filteredProjects.map((p) => {
             const progress = 0; // пока прогресс берём с backend отдельно через /metrics
             const summary = resourceSummary[p.id];
             return (
@@ -212,35 +258,64 @@ export const DashboardPage = () => {
                 </Card>
               </Grid>
             );
-          })}
-        </Grid>
+            })}
+          </Grid>
+        </>
       ) : (
-        <Grid container spacing={2}>
-          {products.map((product) => (
-            <Grid item xs={12} md={4} key={product.id}>
-              <Card
-                sx={{ cursor: "pointer" }}
-                onClick={() => {
-                  const project = projects.find((x) => x.id === product.project);
-                  if (project) {
-                    handleCardClick(project);
-                  } else {
-                    enqueueSnackbar(`Изделие: ${product.name}. Проект ID: ${product.project}`, { variant: "info" });
-                  }
-                }}
-              >
-                <CardContent>
-                  <Typography variant="h6">{product.name}</Typography>
-                  <Typography color="text.secondary">Код: {product.code || "—"}</Typography>
-                  <Typography color="text.secondary">Тип: {product.type || "—"}</Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    Проект ID: {product.project}
-                  </Typography>
-                </CardContent>
-              </Card>
+        <>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Поиск по названию изделия"
+                value={productSearchName}
+                onChange={(e) => setProductSearchName(e.target.value)}
+              />
             </Grid>
-          ))}
-        </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Поиск по коду изделия"
+                value={productSearchCode}
+                onChange={(e) => setProductSearchCode(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Поиск по типу изделия"
+                value={productSearchType}
+                onChange={(e) => setProductSearchType(e.target.value)}
+              />
+            </Grid>
+          </Grid>
+          <Grid container spacing={2}>
+            {filteredProducts.map((product) => (
+              <Grid item xs={12} md={4} key={product.id}>
+                <Card
+                  sx={{ cursor: "pointer" }}
+                  onClick={() => {
+                    const project = projects.find((x) => x.id === product.project);
+                    if (project) {
+                      handleCardClick(project);
+                    } else {
+                      enqueueSnackbar(`Изделие: ${product.name}. Проект ID: ${product.project}`, { variant: "info" });
+                    }
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h6">{product.name}</Typography>
+                    <Typography color="text.secondary">Код: {product.code || "—"}</Typography>
+                    <Typography color="text.secondary">Тип: {product.type || "—"}</Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Проект ID: {product.project}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </>
       )}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Новый проект</DialogTitle>

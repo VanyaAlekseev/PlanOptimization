@@ -1017,7 +1017,7 @@ class ReportViewSet(viewsets.ViewSet):
         return "Helvetica"
 
     @staticmethod
-    def _collect_operations_rows(project_id: int) -> list[dict[str, Any]]:
+    def _collect_operations_rows(project_id: int, equipment_fallback: str | None = None) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         links = (
             ComponentTechProcess.objects.filter(component__product__project_id=project_id)
@@ -1027,6 +1027,9 @@ class ReportViewSet(viewsets.ViewSet):
         for link in links:
             tp = link.tech_process
             eq = tp.equipment_required if isinstance(tp.equipment_required, dict) else {}
+            equipment_name = eq.get("name", "") if isinstance(eq, dict) else ""
+            if not equipment_name and equipment_fallback:
+                equipment_name = equipment_fallback
             rows.append(
                 {
                     "component": link.component.name,
@@ -1034,7 +1037,7 @@ class ReportViewSet(viewsets.ViewSet):
                     "operation_name": tp.name,
                     "prep_time": tp.prep_time or 0,
                     "unit_time": tp.unit_time or 0,
-                    "equipment": eq.get("name", "") if isinstance(eq, dict) else "",
+                    "equipment": equipment_name,
                 }
             )
         return rows
@@ -1130,6 +1133,27 @@ class ReportViewSet(viewsets.ViewSet):
 
         equipment_lines, personnel_lines = self._collect_assigned_resources(selected_plan)
         gantt_rows = self._extract_gantt_rows(selected_plan)
+
+        # В UI “Планировщик” диаграмма строится по ответу `/planning/optimize/` и не сохраняется в `ProductionPlan.schedule`.
+        # Поэтому в PDF при пустом schedule пересчитываем CPM по структуре изделия.
+        if not gantt_rows:
+            service = OptimizationService(
+                project_repo=ProjectRepository(),
+                product_repo=ProductRepository(),
+                component_repo=ComponentRepository(),
+            )
+            cpm_result = service.compare_algorithms(project_id).get("cpm") or {}
+            ops = cpm_result.get("operations")
+            if isinstance(ops, dict):
+                gantt_rows = [
+                    {
+                        "name": str(op.get("name", "Операция")),
+                        "start": float(op.get("earliest_start", 0) or 0),
+                        "end": float(op.get("earliest_finish", op.get("earliest_start", 0) or 0) or 0),
+                    }
+                    for op in ops.values()
+                    if isinstance(op, dict)
+                ]
 
         font_name = self._load_cyrillic_font()
         buffer = BytesIO()
@@ -1255,7 +1279,12 @@ class ReportViewSet(viewsets.ViewSet):
 
         selected_plan = ProductionPlan.objects.filter(project_id=project_id).order_by("-created_date", "-id").first()
         equipment_lines, personnel_lines = self._collect_assigned_resources(selected_plan)
-        operation_rows = self._collect_operations_rows(project_id)
+        equipment_fallback = None
+        if equipment_lines:
+            # equipment_lines format: "<name> (<hours> ч)"
+            equipment_names = [line.rsplit("(", 1)[0].strip() for line in equipment_lines if "(" in line]
+            equipment_fallback = ", ".join([n for n in equipment_names if n]) if equipment_names else None
+        operation_rows = self._collect_operations_rows(project_id, equipment_fallback=equipment_fallback)
 
         wb = Workbook()
 
