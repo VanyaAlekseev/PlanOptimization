@@ -1,13 +1,16 @@
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   MenuItem,
   Paper,
   Select,
+  TextField,
   Table,
   TableBody,
   TableCell,
@@ -89,6 +92,11 @@ export const AlgorithmsComparePage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>("");
   const [chartData, setChartData] = useState<PlanningChartDataDto | null>(null);
+  const [alpha, setAlpha] = useState(0.6);
+  const [beta, setBeta] = useState(0.2);
+  const [gamma, setGamma] = useState(0.2);
+  const [useWorkSchedule, setUseWorkSchedule] = useState(false);
+  const [strictMissingResources, setStrictMissingResources] = useState(false);
 
   useEffect(() => {
     if (projects.length === 0) {
@@ -118,11 +126,26 @@ export const AlgorithmsComparePage = () => {
         enqueueSnackbar("Выберите проект", { variant: "warning" });
         return;
       }
+      if (alpha < 0 || beta < 0 || gamma < 0) {
+        enqueueSnackbar("Весовые коэффициенты не могут быть отрицательными", { variant: "warning" });
+        return;
+      }
+      if (alpha + beta + gamma <= 0) {
+        enqueueSnackbar("Сумма alpha + beta + gamma должна быть больше нуля", { variant: "warning" });
+        return;
+      }
+      const params = {
+        alpha,
+        beta,
+        gamma,
+        use_work_schedule: useWorkSchedule,
+        strict_missing_resources: strictMissingResources
+      };
       setLoading(true);
-      await api.post("/planning/compare-and-save/", { project_id: projectId, params: {} });
+      await api.post("/planning/compare-and-save/", { project_id: projectId, params });
       const chartResponse = await api.post<PlanningChartDataDto>("/planning/chart-data/", {
         project_id: projectId,
-        params: {}
+        params
       });
       setChartData(chartResponse.data);
       const { data } = await api.get<AlgorithmComparisonDto[]>("/algorithm-comparisons/");
@@ -141,10 +164,20 @@ export const AlgorithmsComparePage = () => {
         enqueueSnackbar("Выберите проект и алгоритм", { variant: "warning" });
         return;
       }
+      if (alpha + beta + gamma <= 0) {
+        enqueueSnackbar("Сумма alpha + beta + gamma должна быть больше нуля", { variant: "warning" });
+        return;
+      }
       await api.post("/planning/select-algorithm/", {
         project_id: projectId,
         algorithm: selectedAlgorithm.toLowerCase(),
-        params: {}
+        params: {
+          alpha,
+          beta,
+          gamma,
+          use_work_schedule: useWorkSchedule,
+          strict_missing_resources: strictMissingResources
+        }
       });
       enqueueSnackbar(`Алгоритм ${selectedAlgorithm} закреплен за проектом`, { variant: "success" });
     } catch {
@@ -176,6 +209,62 @@ export const AlgorithmsComparePage = () => {
           ))}
         </Select>
       </FormControl>
+      <Paper sx={{ p: 2, mb: 2, maxWidth: 900 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Параметры оптимизации
+        </Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              type="number"
+              label="alpha (makespan)"
+              value={alpha}
+              inputProps={{ step: 0.1, min: 0 }}
+              onChange={(e) => setAlpha(Number(e.target.value))}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              type="number"
+              label="beta (human_hours)"
+              value={beta}
+              inputProps={{ step: 0.1, min: 0 }}
+              onChange={(e) => setBeta(Number(e.target.value))}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              type="number"
+              label="gamma (resource_delay)"
+              value={gamma}
+              inputProps={{ step: 0.1, min: 0 }}
+              onChange={(e) => setGamma(Number(e.target.value))}
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <Typography variant="caption" color="text.secondary">
+              Сумма коэффициентов может быть любой: backend нормализует веса до суммы 1.
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <FormControlLabel
+              control={<Checkbox checked={useWorkSchedule} onChange={(e) => setUseWorkSchedule(e.target.checked)} />}
+              label="Учитывать work_schedule (stage 2)"
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <FormControlLabel
+              control={
+                <Checkbox checked={strictMissingResources} onChange={(e) => setStrictMissingResources(e.target.checked)} />
+              }
+              label="Строго считать отсутствие ресурса недопустимым"
+            />
+          </Grid>
+        </Grid>
+      </Paper>
       <Button sx={{ ml: 2, mb: 2 }} variant="contained" onClick={() => void handleRunCompare()}>
         Запустить сравнение
       </Button>

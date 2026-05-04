@@ -100,13 +100,25 @@ class OptimizationService:
 
     def _series_from_schedule(self, payload: Dict[str, Any], rate: float, kpi_key: str) -> Dict[str, Any]:
         schedule = payload.get("schedule", []) or []
+        if not isinstance(schedule, list):
+            schedule = []
+
+        def _op_end(item: Any) -> float:
+            start = float(item.get("start", item.get("start_day", 0)) or 0)
+            end = item.get("end")
+            if end is not None:
+                return float(end)
+            duration = float(item.get("duration", 0) or 0)
+            return start + duration
+
+        schedule_sorted = sorted(schedule, key=_op_end)
         time_series: List[Dict[str, float]] = []
         money_series: List[Dict[str, float]] = []
         cumulative_time = 0.0
         cumulative_money = 0.0
-        for idx, item in enumerate(schedule, start=1):
+        for idx, item in enumerate(schedule_sorted, start=1):
             duration = float(item.get("duration", 0))
-            cumulative_time += duration
+            cumulative_time = max(cumulative_time, _op_end(item))
             cumulative_money += duration * rate
             time_series.append({"step": float(idx), "value": cumulative_time})
             money_series.append({"step": float(idx), "value": cumulative_money})

@@ -108,12 +108,39 @@ class ProductImportStubSerializer(serializers.Serializer):
 class OptimizationRequestSerializer(serializers.Serializer):
     algorithm = serializers.ChoiceField(choices=["cpm", "ga", "sa"])
     async_run = serializers.BooleanField(required=False, default=False)
-    params = serializers.JSONField(required=False, default=dict)
+    params = serializers.DictField(required=False, default=dict)
+
+    def validate_params(self, value):
+        # Управляемые параметры оптимизации (прочие поля не запрещаем для обратной совместимости).
+        if "alpha" in value:
+            value["alpha"] = float(value["alpha"])
+        if "beta" in value:
+            value["beta"] = float(value["beta"])
+        if "gamma" in value:
+            value["gamma"] = float(value["gamma"])
+        if "use_work_schedule" in value:
+            value["use_work_schedule"] = bool(value["use_work_schedule"])
+        if "strict_missing_resources" in value:
+            value["strict_missing_resources"] = bool(value["strict_missing_resources"])
+        return value
 
 
 class CompareAlgorithmsRequestSerializer(serializers.Serializer):
     async_run = serializers.BooleanField(required=False, default=False)
-    params = serializers.JSONField(required=False, default=dict)
+    params = serializers.DictField(required=False, default=dict)
+
+    def validate_params(self, value):
+        if "alpha" in value:
+            value["alpha"] = float(value["alpha"])
+        if "beta" in value:
+            value["beta"] = float(value["beta"])
+        if "gamma" in value:
+            value["gamma"] = float(value["gamma"])
+        if "use_work_schedule" in value:
+            value["use_work_schedule"] = bool(value["use_work_schedule"])
+        if "strict_missing_resources" in value:
+            value["strict_missing_resources"] = bool(value["strict_missing_resources"])
+        return value
 
 
 class ResourceAvailabilitySerializer(serializers.Serializer):
